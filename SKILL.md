@@ -1,6 +1,6 @@
 ---
 name: rename-plus
-description: "Rename the current terminal, tmux window, and supported runtime task-title surfaces to one verified label."
+description: "Rename the current terminal, tmux window, and supported runtime task-title surfaces to one verified label. Use when asked to rename this session, name this pane or window, relabel a Codex or Claude tmux session, or change the task title."
 ---
 
 # rename-plus — rename every available title surface
