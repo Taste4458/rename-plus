@@ -1,25 +1,22 @@
 # rename-plus
 
-A [Claude Code](https://claude.com/claude-code) skill: when you tell the agent to "rename this session to match what we're doing," a terminal running Claude Code actually has **three** independently-named tiers that drift apart. `rename-plus` renames the two tmux tiers itself and hands you the one-line `/rename` command for the third (which only a human can run) — so all three end up on one label.
+A [Claude Code](https://claude.com/claude-code) / [Codex](https://openai.com/codex/) skill: synchronizes the two directly-controllable tmux tiers (session name + window name) for the current terminal to one coherent label. The chat/task title — the Claude Code session name or the Codex thread title — is a separate, runtime-owned surface, set automatically by a `UserPromptSubmit` handler before this skill runs; this script never edits that registry directly.
 
-See [`SKILL.md`](SKILL.md) for the actual behaviour and [`rename-plus.sh`](rename-plus.sh) for the helper.
+See [`SKILL.md`](SKILL.md) for the actual behaviour and [`rename-plus.sh`](rename-plus.sh) for the tmux helper.
 
-## The three name tiers
+## The title tiers
 
-| Tier | What sets it | Can the agent do it? |
+| Tier | What sets it | Can this skill do it? |
 |---|---|---|
 | 🪟 **tmux session** | `tmux rename-session` | ✅ directly — the script does it |
 | 🗂️ **tmux window** | `tmux rename-window` (+ `automatic-rename off`) | ✅ directly — the script does it |
-| 🤖 **Claude Code session** | `/rename <name>` | ❌ **propose only** — the agent hands you the line to paste |
+| 🤖 **Chat/task title** (Claude Code session name or Codex thread title) | Runtime-native handler (`UserPromptSubmit` → `thread/name/set` app-server method, every Codex runtime) | ⚙️ runtime-owned — set automatically before this skill runs, not by this script |
 
-## Why the Claude tier is propose-only (the load-bearing fact)
+## Why the chat/task title is handled separately
 
-`/rename` writes the `name` field in `~/.claude/sessions/<pid>.json` — a registry the **live `claude` process owns and rewrites on every status change**. Auto-derived names visibly drift (`alice-2f` → `alice-e9` between two commands), so:
+Earlier versions of this skill tried to *propose* a `/rename <name>` command for the operator to paste, because the Claude Code session name lives in a registry (`~/.claude/sessions/<pid>.json`) that the live `claude` process owns and rewrites on every status change — a hand-edit gets clobbered within seconds, and `/rename` is an interactive REPL command the agent can't type into its own prompt.
 
-- a hand-edit to that JSON is clobbered within seconds, and
-- `/rename` is an interactive REPL command the agent **cannot type into its own prompt**.
-
-So the honest contract is: the agent renames the two tmux tiers itself, **verifies them by readback**, and then *proposes* `/rename <name>` for you — it never edits the registry and never claims the Claude tier is done when only a human can finish it.
+That's now handled differently: a `UserPromptSubmit` event handler runs before this skill, receives the current thread ID, and calls the runtime's own `thread/name/set` app-server method to set the persisted task title directly — no registry hand-edits, no pasted command. This skill never claims to have set that tier itself; it reports the handler's result and moves on to the tmux tiers, which it renames and verifies directly.
 
 ## Usage
 
@@ -28,14 +25,17 @@ So the honest contract is: the agent renames the two tmux tiers itself, **verifi
 ```
 
 - Renames the tmux session + window, sets `automatic-rename off`, and reads them back to confirm.
-- Prints the exact `/rename my-work` line for you to paste into the Claude prompt.
-- Not inside tmux? It skips the tmux tiers and still prints the `/rename` line.
+- Not inside tmux (`$TMUX` unset)? It skips the tmux tiers and reports that.
+- Does not touch the chat/task title — that's the handler's job, already done before this script runs. Never run a duplicate helper for it, and never use Computer Use or a desktop-only title tool to inspect or rename Codex/Ghostty.
+
+## Verification
+
+For the Codex chat/task title specifically, verify both surfaces after the handler runs: the persisted task title, and the live window's `@codex_session_name`. If only the terminal-multiplexer display (TokScale) is stale, use `~/.cache/ghostty-tmux/socket` and target only the window whose `@codex_thread_id` exactly matches the current thread — never infer identity from an existing session/window name or the requested label; zero or multiple matches must fail closed.
 
 ## Safety
 
-- **Prompt-injection guard.** The name in the `/rename` proposal is reduced to a single line of printable ASCII — all C0/C1 controls, DEL, and multibyte line-breakers (NEL, LS, PS) are dropped under `LC_ALL=C` — so a name containing any line break can never expand into a second pastable prompt command (e.g. `foo⏎/quit` becomes the inert one-line string `foo /quit`). Non-ASCII letters are dropped by design.
-- **tmux-safe slug.** tmux session targets choke on `.`/`:`; the script derives a conservative slug (`feat.2:api` → `feat-2-api`) for the tmux tiers while keeping the fuller name for the `/rename` proposal.
-- **Always prints `/rename`.** The `/rename` line is printed even if the tmux step is skipped or fails (stale `$TMUX`, unreachable server, name clash) — that line is the whole point, so nothing aborts before it.
+- **Input guard.** The name is reduced to a single line of printable ASCII — all C0/C1 controls, DEL, and multibyte line-breakers (NEL, LS, PS) are dropped under `LC_ALL=C` — so a name containing any line break can never expand into a second pastable command. Non-ASCII letters are dropped by design.
+- **tmux-safe slug.** tmux session targets choke on `.`/`:`; the script derives a conservative slug (`feat.2:api` → `feat-2-api`) for the tmux tiers.
 - **No persistence claims.** These are live labels on the running session, not a change to how future sessions are auto-named.
 
 ## License
