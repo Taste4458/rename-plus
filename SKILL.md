@@ -1,7 +1,6 @@
 ---
 name: rename-plus
-description: >-
-  Use when the operator wants to rename "this session" / "this terminal" / "this pane/window/tab" to match what you're working on. Syncs the tmux session and window to one coherent label, and reports whether the active runtime exposes a separate task-title control. Triggers: "rename this session", "rename this to match what we're doing", "rename everything", "/rename", "name this pane", "the tmux session is still called claude-<timestamp>".
+description: "Rename the current terminal, tmux window, and supported runtime task-title surfaces to one verified label."
 ---
 
 # rename-plus — rename every available title surface
@@ -19,8 +18,8 @@ A terminal has two directly controllable tmux tiers; the chat/task title is a se
 ## Usage
 
 1. **Pick the name.** If the operator gave one, use it. Otherwise derive a short kebab-case slug from what this session is *doing* (`tmux-setup`, `nicegui-pr-4821`), not from the machine.
-2. **Let the event handler perform the complete rename.** The UserPromptSubmit handler receives the current thread ID, calls the supported local `thread/name/set` app-server method, then sets the tmux/Ghostty label. It is runtime-independent and runs before this skill. Never use Computer Use or a desktop-only title tool to inspect or rename Codex/Ghostty.
-3. **Report the handler result.** Do not run a duplicate helper. If the persisted-title update fails, report that title as unchanged rather than claiming terminal output was a complete rename.
+2. **Let the event handler attempt the complete rename.** The UserPromptSubmit handler receives the current thread ID, calls the supported local `thread/name/set` app-server method, then sets the tmux/Ghostty label.
+3. **Verify both surfaces.** Read back the persisted task title and the live window's `@codex_session_name`. If only TokScale is stale, use `~/.cache/ghostty-tmux/socket` and target only the window whose `@codex_thread_id` exactly matches the current thread. Never infer identity from an existing session/window name or requested label; zero or multiple matches must fail closed. Set the window option and window name, then verify the option and rendered TokScale text. Never use Computer Use or a desktop-only title tool.
 
 ## Notes
 
