@@ -1,29 +1,23 @@
 ---
 name: rename-plus
-description: "Rename the current terminal, tmux window, and supported runtime task-title surfaces to one verified label. Use when asked to rename this session, name this pane or window, relabel a Codex or Claude tmux session, or change the task title."
+description: "Route Codex and Claude session rename requests to their runtime skills; rename a plain tmux terminal when explicitly requested."
 ---
 
-# rename-plus — rename every available title surface
+# rename-plus
 
-## Overview
+**Codex:** Follow `/Users/samstull/.agents/skills/source-command-rename/SKILL.md` for the saved task title and exact thread-bound tab. Do not run `rename-plus.sh` in Codex.
 
-A terminal has two directly controllable tmux tiers; the chat/task title is a separate runtime-owned surface. This skill synchronizes the terminal tiers and uses a runtime-native task-title control only when the active runtime exposes one. It never edits a session-registry file.
+**Claude Code:** Follow `/Users/samstull/.agents/skills/rename/SKILL.md` for its hook-owned tab title.
 
-| Tier | What sets it | Can the agent do it? |
-|---|---|---|
-| **tmux session** | `tmux rename-session` | ✅ directly |
-| **tmux window** | `tmux rename-window` (+ `automatic-rename off`) | ✅ directly |
-| **Codex chat/task title** | UserPromptSubmit app-server handler | ✅ for every Codex runtime |
+**Plain tmux:** For an explicit terminal session/window rename, run `bash rename-plus.sh "<name>"` and read back `#S` and `#W`. This helper does not change any chat task title.
 
-## Usage
+## Plain tmux details
 
-1. **Pick the name.** If the operator gave one, use it. Otherwise derive a short kebab-case slug from what this session is *doing* (`tmux-setup`, `nicegui-pr-4821`), not from the machine.
-2. **Let the event handler attempt the complete rename.** The UserPromptSubmit handler receives the current thread ID, calls the supported local `thread/name/set` app-server method, then sets the tmux/Ghostty label.
-3. **Verify both surfaces.** Read back the persisted task title and the live window's `@codex_session_name`. If only TokScale is stale, use `~/.cache/ghostty-tmux/socket` and target only the window whose `@codex_thread_id` exactly matches the current thread. Never infer identity from an existing session/window name or requested label; zero or multiple matches must fail closed. Set the window option and window name, then verify the option and rendered TokScale text. Never use Computer Use or a desktop-only title tool.
+Use the supplied name; if it is descriptive rather than literal, derive a short title from the current work. The helper sanitizes the tmux session slug and sets `automatic-rename off`.
 
-## Notes
+The helper is for a plain terminal only. If a Codex thread binding is missing or non-unique, leave terminal titles untouched and report that condition.
 
 - The script derives a **conservative tmux-safe slug** for the tmux tiers (`feat.2:api` → `feat-2-api`), since tmux session targets choke on `.`/`:`.
 - **Input guard:** the tmux label is reduced to a single line of printable ASCII; controls and non-ASCII characters are dropped.
-- Names are **live labels, not persistent** — a fresh tmux/Codex session starts auto-named again. This skill re-labels the current session; it does not change how future sessions are auto-named.
+- Plain tmux names are live labels; a fresh terminal session starts auto-named again.
 - `automatic-rename off` is set so the shell/running program can't overwrite the window name back.
